@@ -1,0 +1,14 @@
+
+This is a test of implementing something like malloc using only mmap.  The assignment can be found here:
+
+http://pages.cs.wisc.edu/~remzi/Classes/537/Spring2009/Projects/p3.html
+
+The class schedule can be found here:
+
+http://pages.cs.wisc.edu/~remzi/Classes/537/Spring2010/
+
+
+Two stackoverflow questions about MMAP can be of some help:
+http://stackoverflow.com/questions/3550531/mmap-for-direct-io-bad-address
+http://stackoverflow.com/questions/1083172/how-to-mmap-the-stack-for-the-clone-system-call-on-linux
+
