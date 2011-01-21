@@ -1,11 +1,10 @@
 #!/usr/bin/env python3
 
-#from posturedrc import opts
 from datetime import datetime, timedelta
 from random import random
 import imp
-import sys
-import os
+import sys, os, shutil
+
 
 def importpyfile(name, path):
     "Import a python module from path and call it name."
@@ -17,9 +16,18 @@ def importpyfile(name, path):
     with open(path, 'rb') as fp:
         return imp.load_module(name, fp, path, ('.py', 'rb', imp.PY_SOURCE))
 
-# import our posturedrc file
-# TODO: if we can't find it, we could always create it
-importpyfile("posturedrc", "~/.posturedrc.py")
+# when we import the file from the home directory, we don't want to
+# create bytecode and clutter up the user's $HOME
+__old_write_val = sys.dont_write_bytecode
+sys.dont_write_bytecode = True
+# import our posturedrc file, if we can't find it, we can just create it
+try:
+    importpyfile("posturedrc", "~/.posturedrc")
+except IOError as e:
+    from . import posturedrc as sample_posturedrc
+    shutil.copy(sample_posturedrc.__file__, os.path.expanduser("~/.posturedrc"))
+    importpyfile("posturedrc", "~/.posturedrc")
+sys.dont_write_bytecode = __old_write_val
 from posturedrc import opts
 
 
@@ -90,8 +98,6 @@ def main():
                 (weekdaystr(curdate.weekday()), [weekdaystr(day) for day in opts.days]))
 
     opts.action.run()
-
-
 
 if __name__ == '__main__':
     main()

@@ -1,5 +1,7 @@
-
 import os
+# get the location of our sounds path
+__pkgpath = os.path.dirname(__file__)
+soundspath = os.path.join(__pkgpath, "sounds")
 
-pkg_path = os.path.dirname(__file__)
-sounds_path = os.path.join(pkg_path, "sounds")
+from . import actions
+from .postured import *
