@@ -1,35 +1,51 @@
-#!/usr/bin/env python3
+#!/usr/bin/env python2
 
 from datetime import datetime, timedelta
 from random import random
 import imp
 import sys, os, shutil
+import argparse
+
+# this needs to be in here, otherwise importing actions from 
+# the stock postured doesn't work
+from . import actions
 
 
-def importpyfile(name, path):
-    "Import a python module from path and call it name."
+def importconfig():
+    """
+    Try to import ~/.posturedrc, and if we can't find it, 
+    import posturedrc.py from within this module.
+    """
+
+    def importpyfile(name, path):
+        "Import a python module from path and call it name."
+        try:
+            return sys.modules[name]
+        except KeyError:
+            pass
+        path = os.path.expanduser(path)
+        with open(path, 'rb') as fp:
+            return imp.load_module(name, fp, path, ('.py', 'rb', imp.PY_SOURCE))
+
+    # when we import the file from the home directory, we don't want to
+    # create bytecode and clutter up the user's $HOME
+    __old_write_val = sys.dont_write_bytecode
+    sys.dont_write_bytecode = True
+    # import our posturedrc file, if we can't find it, we can just create it
     try:
-        return sys.modules[name]
-    except KeyError:
-        pass
-    path = os.path.expanduser(path)
-    with open(path, 'rb') as fp:
-        return imp.load_module(name, fp, path, ('.py', 'rb', imp.PY_SOURCE))
+        posturedrc_mod = importpyfile("postured.posturedrc", "~/.posturedrc")
+    except IOError as e:
+        from . import posturedrc as sample_posturedrc
+        if sample_posturedrc.__file__[-1] == "c":
+            # this is a compiled python file, so we need to copy
+            # over the uncompiled file
+            shutil.copy(sample_posturedrc.__file__[:-1], os.path.expanduser("~/.posturedrc"))
+        else:
+            shutil.copy(sample_posturedrc.__file__, os.path.expanduser("~/.posturedrc"))
+        posturedrc_mod = importpyfile("postured.posturedrc", "~/.posturedrc")
+    sys.dont_write_bytecode = __old_write_val
 
-# when we import the file from the home directory, we don't want to
-# create bytecode and clutter up the user's $HOME
-__old_write_val = sys.dont_write_bytecode
-sys.dont_write_bytecode = True
-# import our posturedrc file, if we can't find it, we can just create it
-try:
-    importpyfile("posturedrc", "~/.posturedrc")
-except IOError as e:
-    from . import posturedrc as sample_posturedrc
-    shutil.copy(sample_posturedrc.__file__, os.path.expanduser("~/.posturedrc"))
-    importpyfile("posturedrc", "~/.posturedrc")
-sys.dont_write_bytecode = __old_write_val
-from posturedrc import opts
-
+    return posturedrc_mod.opts
 
 def weekdaystr(day):
     """
@@ -47,6 +63,19 @@ def tdtosecs(td):
     return (td.days * 24 * 60 * 60) + td.seconds + (td.microseconds * 0.000001)
 
 def main():
+
+    parser = argparse.ArgumentParser(description="A cron-like reminder daemon.")
+    parser.add_argument('--daemonize', '--daemon', '-D', action='store_true', 
+            help="detach from the controlling terminal")
+    parser.add_argument('--rcfile', '-i', action='store', 
+            help="rc file (something other than ~/.posturedrc)")
+    #parser.add_argument('--verbose', '-v', action='store_true', 
+    #        help="detach from the controlling terminal")
+    args = parser.parse_args()
+
+    print(args)
+
+    opts = importconfig()
 
     # time delta of zero
     tdzero = timedelta()

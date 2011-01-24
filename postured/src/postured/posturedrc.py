@@ -1,6 +1,6 @@
 import datetime
 import os
-import postured.actions
+import postured
 
 class Options(object):
     minlength = datetime.timedelta(minutes=30)
