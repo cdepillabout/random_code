@@ -3,7 +3,10 @@
 from datetime import datetime, timedelta
 from random import random
 import imp
-import sys, os, shutil
+import sys
+import os
+import shutil
+import time
 import argparse
 import logging
 import logging.handlers
@@ -70,8 +73,11 @@ def tdtosecs(td):
     "Convert a timedelta to seconds."
     return (td.days * 24 * 60 * 60) + td.seconds + (td.microseconds * 0.000001)
 
-def calcsleepsecs(opts):
-    "Calculate the number of seconds needed to sleep."
+def nextaction(opts, count=0):
+    """
+    Check values from the config file, do the action if applicable, and return
+    the number of seconds. Don't do the action if count is 0.
+    """
 
     minlength, maxlength, starttime, endtime, days, curdate, curtime = checksettings(opts)
 
@@ -79,16 +85,42 @@ def calcsleepsecs(opts):
     newsecs = tdtosecs(difftime) * random()
     newdelta = timedelta(seconds=newsecs) + minlength
     nexttime = datetime.today() + newdelta
+    nextsecs = tdtosecs(newdelta)
 
-    logger.debug("current time: " + str(curtime))
+    logger.debug("current time: %s" % curtime)
     logger.debug("next alarm time: %s" % nexttime)
+
+    if curtime < starttime:
+        logger.info("curtime (%s) is before start time (%s), so not doing action." % 
+                (curtime, starttime))
+        return nextsecs
+        
+    if curtime > endtime:
+        logger.info("curtime (%s) is after end time (%s), so not doing action" %
+                (curtime, endtime))
+        return nextsecs
+
+    if curdate.weekday() not in days:
+        logger.info("current day (%s) is not in days (%s), so not doing action" % 
+                (weekdaystr(curdate.weekday()), [weekdaystr(day) for day in days]))
+        return nextsecs
+
+    if count <= 0:
+        logger.debug("not doing action because count (%s) is less than 1" % count)
+        return nextsecs
+
+    logger.debug("running action...")
+    opts.action.run()
+    return nextsecs
+
+
 
 
 def checksettings(opts):
     """
-    Check that the settings values all make sense. Returns a tuple with
-    minlength, maxlength, starttime, endtime, and days values from the 
-    config file, and the curtime and curdate are sent back.
+    Check that the settings values are all available and all make sense.
+    Returns a tuple with minlength, maxlength, starttime, endtime, and days
+    values from the config file, and the curtime and curdate.
     """
     def assert_hasattr(opts, varname):
         if not hasattr(opts, varname):
@@ -99,6 +131,7 @@ def checksettings(opts):
     assert_hasattr(opts, "starttime")
     assert_hasattr(opts, "endtime")
     assert_hasattr(opts, "days")
+    assert_hasattr(opts, "action")
 
     minlength = opts.minlength
     maxlength = opts.maxlength
@@ -129,19 +162,6 @@ def checksettings(opts):
     if starttime >= endtime:
         logger.error("starttime %s is greater than or equal to endtime %s" % 
                 (starttime, endtime))
-        sys.exit(1)
-
-    if curtime < starttime:
-        logger.error("curtime (" + str(curtime) + ") is before start time (" + str(starttime) + ")")
-        sys.exit(1)
-        
-    if curtime > endtime:
-        logger.error("curtime (" + str(curtime) + ") is after end time (" + str(endtime) + ")")
-        sys.exit(1)
-
-    if curdate.weekday() not in days:
-        logger.error("current day (%s) is not in days (%s)" % 
-                (weekdaystr(curdate.weekday()), [weekdaystr(day) for day in days]))
         sys.exit(1)
 
     return minlength, maxlength, starttime, endtime, days, curdate, curtime
@@ -224,8 +244,11 @@ def main():
     daemonize = is_daemon(opts, args)
     setuplogging(opts, daemonize)
 
-    sleeptime = calcsleepsecs(opts)
-    opts.action.run()
+    count = 0
+    while True:
+        sleeptime = nextaction(opts, count)
+        time.sleep(sleeptime)
+        count += 1
 
 if __name__ == '__main__':
     main()

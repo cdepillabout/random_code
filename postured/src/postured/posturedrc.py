@@ -15,8 +15,8 @@ class Options(object):
 
     action = postured.actions.PlaySound()
 
-    # this can either be "DEBUG", "INFO", "WARN", etc.
-    loglevel = logging.WARN
+    # this can either be "logging.DEBUG", "loggin.INFO", "logging.WARN", etc.
+    loglevel = logging.DEBUG
 
     # whether or not to daemonize
     daemonize = False
