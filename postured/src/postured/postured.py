@@ -166,6 +166,50 @@ def checksettings(opts):
 
     return minlength, maxlength, starttime, endtime, days, curdate, curtime
 
+def daemonize_process():
+    "Daemonize the process."
+    if (hasattr(os, "devnull")):
+        devnull = os.devnull
+    else:
+        devnull = "/dev/null"
+
+    try: 
+        pid = os.fork() 
+        if pid > 0: 
+            sys.exit(0) 
+    except OSError, e: 
+        logger.error("Error when forking first time: %s" % str(e))
+        sys.exit(1) 
+    
+    os.chdir("/") 
+    os.setsid() 
+    os.umask(0) 
+    
+    try: 
+        pid = os.fork() 
+        if pid > 0: 
+            sys.exit(0) 
+    except OSError, e: 
+        logger.error("Error when forking second time: %s" % str(e))
+        sys.exit(1) 
+
+    import resource     # Resource usage information.
+    maxfd = resource.getrlimit(resource.RLIMIT_NOFILE)[1]
+    if (maxfd == resource.RLIM_INFINITY):
+        maxfd = MAXFD
+
+    # Iterate through and close all file descriptors.
+    for fd in range(0, maxfd):
+        try:
+            os.close(fd)
+        except OSError:   # ERROR, fd wasn't open to begin with (ignored)
+            pass
+
+    os.open(devnull, os.O_RDWR) # standard input (0)
+    os.dup2(0, 1)            # standard output (1)
+    os.dup2(0, 2)            # standard error (2)
+
+
 def is_daemon(opts, args):
     """
     Checks if should daemonize or not.  Command line arguments override the
@@ -225,13 +269,13 @@ def main():
     parser.add_argument('--rcfile', '-i', action='store', 
             help="rc file (something other than ~/.posturedrc)")
     parser.add_argument('--verbose', '-v', action='store_true', 
-            help="detach from the controlling terminal")
+            help="verbose output")
 
     group = parser.add_mutually_exclusive_group()
     group.add_argument('--daemonize', '--daemon', '-D', dest="daemonize", 
             action='store_true', default=None, help="detach from the controlling terminal")
     group.add_argument('--no-daemonize', '--no-daemon', '-N', dest="daemonize", 
-            action='store_false', default=None, help="detach from the controlling terminal")
+            action='store_false', default=None, help="do not detach from the controlling terminal")
 
     args = parser.parse_args()
 
@@ -243,6 +287,11 @@ def main():
 
     daemonize = is_daemon(opts, args)
     setuplogging(opts, daemonize)
+
+    if daemonize:
+        logger.debug("Trying to daemonize...")
+        daemonize_process()
+        logger.debug("daemonized.")
 
     count = 0
     while True:
