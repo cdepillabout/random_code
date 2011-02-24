@@ -43,6 +43,16 @@ def debug_print_cur_ids():
     os.close(fd)
     os.remove(name)
 
+class CommandError(Exception):
+    """
+    This is an error for run_command to throw if there is an error when running
+    a command.
+    """
+    def __init__(self, value):
+        self.value = value
+    def __str__(self):
+        return repr(self.value)
+
 def run_command(command=None, function=None, dropprivs=True, 
         replaceusergroup=False, captureoutput=False):
     """
@@ -107,7 +117,7 @@ def run_command(command=None, function=None, dropprivs=True,
         cur_user_name = pwd.getpwuid(os.getuid()).pw_name
 
         if command:
-            print("Running `%s`..." % command)
+            print("running `%s`" % command)
 
             if captureoutput:
                 process = subprocess.Popen(command, shell=True, stdout=stdout_wpipe, stderr=stderr_wpipe)
@@ -123,7 +133,7 @@ def run_command(command=None, function=None, dropprivs=True,
                 sys.stderr.write("ERROR: `%s` failed while "
                         "running as user %s.\n" % (command, cur_user_name))
                 sys.exit(1)
-            print "Finished `%s`.\n" % command
+            #print "Finished `%s`.\n" % command
             sys.exit(0)
         else:
             sys.stdout = stdout_wpipe
@@ -146,9 +156,17 @@ def run_command(command=None, function=None, dropprivs=True,
 
         if exit_status != 0:
             if captureoutput:
-                sys.stderr.write("Command failed with this output to stdout: %s\n" % stdout_output)
-                sys.stderr.write("Command failed with this output to stderr: %s\n" % stderr_output)
-            sys.exit(1)
+                if command:
+                    thistype = "Command"
+                else:
+                    thistype = "Function"
+                sys.stderr.write("%s failed with this output to stdout: %s\n" % (thistype, stdout_output))
+                sys.stderr.write("%s failed with this output to stderr: %s\n" % (thistype, stderr_output))
+
+            if command:
+                raise CommandError("Command `%s` failed." % command)
+            else:
+                raise CommandError("Function failed.")
 
         if captureoutput:
             return (stdout_output, stderr_output)
@@ -274,13 +292,19 @@ def install_kernel_remote(build_dir_arg, builddir, remotehost, tempmoddir=None):
     config, config_remote_install_path = get_config(build_dir_arg, builddir)
     systemmap, systemmap_remote_install_path = get_systemmap(build_dir_arg, builddir)
 
-    remote_install_file(remotehost, bzimage, bzimage_remote_install_path, copy_link=True)
-    remote_install_file(remotehost, config, config_remote_install_path)
-    remote_install_file(remotehost, systemmap, systemmap_remote_install_path)
+    try:
+        remote_install_file(remotehost, bzimage, bzimage_remote_install_path, copy_link=True)
+        remote_install_file(remotehost, config, config_remote_install_path)
+        remote_install_file(remotehost, systemmap, systemmap_remote_install_path)
 
-    if tempmoddir:
-        remote_install_file(remotehost, os.path.join(tempmoddir,"lib"), "/")
-        shutil.rmtree(tempmoddir)
+        if tempmoddir:
+            remote_install_file(remotehost, os.path.join(tempmoddir,"lib"), "/")
+            shutil.rmtree(tempmoddir)
+    except CommandError, e:
+        # if there was an error, then we must delete our temp mod dir.
+        if tempmoddir:
+            shutil.rmtree(tempmoddir)
+        raise  # Should we raise here?
 
 def main():
     parser = argparse.ArgumentParser(description="Install the current kernel.")
@@ -324,7 +348,6 @@ def main():
         run_command("make %s" % build_dir_arg)
 
     if args.make_install_modules:
-
         if args.ssh:
             # make a temporary directory for us to use
             func = lambda: sys.stdout.write(str(tempfile.mkdtemp()))
@@ -345,6 +368,8 @@ def main():
     if args.ssh:
         if args.make_install_modules:
             install_kernel_remote(build_dir_arg, builddir, args.ssh, temp_mod_install_dir)
+        else:
+            install_kernel_remote(build_dir_arg, builddir, args.ssh)
     else:
         install_kernel_local(build_dir_arg, builddir)
 
