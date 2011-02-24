@@ -224,16 +224,9 @@ def remote_install_file(remotehost, file_name, remote_install_path):
     """
     Install file_name on remotehost as remote_install_path.
     """
-    command = ["scp", "-R", file_name, "%s:%s" % (remotehost, remote_install_path)]
-    process = subprocess.popen(command, stdout=sys.stdout, stderr=sys.stderr)
-    retcode = process.wait()
-    if retcode < 0:
-        sys.stderr.write("ERROR: `%s` was terminated by signal %s.\n" % 
-                (command, -retcode))
-        sys.exit(1)
-    elif retcode > 0:
-        sys.stderr.write("ERROR: `%s` failed\n" % command)
-        sys.exit(1)
+    # should we copy links?
+    command = "rsync -r %s %s:%s" % (file_name, remotehost, remote_install_path)
+    run_command(command)
 
 def install_kernel_local(build_dir_arg, builddir):
     """
@@ -278,7 +271,9 @@ def install_kernel_remote(build_dir_arg, builddir, remotehost, tempmoddir=None):
     remote_install_file(remotehost, config, config_remote_install_path)
     remote_install_file(remotehost, systemmap, systemmap_remote_install_path)
 
-    # todo: install modules and then remove tempmoddir
+    if tempmoddir:
+        remote_install_file(remotehost, os.path.join(tempmoddir,"lib"), "/")
+        shutil.rmtree(tempmoddir)
 
 def main():
     parser = argparse.ArgumentParser(description="Install the current kernel.")
@@ -329,9 +324,10 @@ def main():
             #func = lambda: tempfile.mkdtemp()
             temp_mod_install_dir, _ = run_command(function=func, captureoutput=True)
             temp_install_dir_arg = "INSTALL_MOD_PATH=%s" % temp_mod_install_dir
-
-        run_command(command="make %s %s modules_install" % (temp_install_dir_arg, build_dir_arg), 
-                dropprivs=False)
+            run_command(command="make %s %s modules_install" % (temp_install_dir_arg, build_dir_arg)) 
+        else:
+            run_command(command="make %s %s modules_install" % (temp_install_dir_arg, build_dir_arg), 
+                    dropprivs=False)
 
         sudo_uid_gid_exist = ("SUDO_UID" in os.environ and \
                 "SUDO_GID" in os.environ)
