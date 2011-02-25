@@ -43,6 +43,23 @@ def debug_print_cur_ids():
     os.close(fd)
     os.remove(name)
 
+def inPATH(command):
+    "Makes sure command is on PATH"
+    def is_exe(fpath):
+        return os.path.isfile(fpath) and os.access(fpath, os.X_OK)
+
+    if not "PATH" in os.environ:
+        sys.stderr.write("WARNING: PATH environment variable does not exist.\n")
+        return False
+
+    for path in os.environ["PATH"].split(os.pathsep):
+        fullpath = os.path.join(path, command)
+        if is_exe(fullpath):
+            return True
+
+    return False
+
+
 class CommandError(Exception):
     """
     This is an error for run_command to throw if there is an error when running
@@ -319,20 +336,26 @@ def install_kernel_remote(build_dir_arg, builddir, remotehost, tempmoddir=None):
 
 def main():
     parser = argparse.ArgumentParser(description="Install the current kernel.")
-    parser.add_argument('--make-menuconfig', '-c', action='store_true', 
-            help="run `make menuconfig` first")
     parser.add_argument('--make', '-m', action='store_true', 
             help="run `make` first")
     parser.add_argument('--make-install-modules', '-i', action='store_true', 
             help="run `make modules_install`")
     parser.add_argument('--ssh', '-s', action='store', metavar='REMOTE_MACHINE', 
             help="use ssh to copy kernel to REMOTE_MACHINE")
+    parser.add_argument('--ccache', '-f', action='store_true',
+            help="use ccache when compiling kernel")
 
-    group = parser.add_mutually_exclusive_group()
-    group.add_argument('--build-dir', '-b', action='store', 
+    make_config_group = parser.add_mutually_exclusive_group()
+    make_config_group.add_argument('--make-menuconfig', '-c', action='store_true', 
+            help="run `make menuconfig` first")
+    make_config_group.add_argument('--make-oldconfig', '-o', action='store_true', 
+            help="run `make oldconfig` first")
+
+    build_dir_group = parser.add_mutually_exclusive_group()
+    build_dir_group.add_argument('--build-dir', '-b', action='store', 
             help="use a separate build directory, defaults to \"build/\"", 
             default="./build")
-    group.add_argument('--no-build-dir', '-n', action='store_true', 
+    build_dir_group.add_argument('--no-build-dir', '-n', action='store_true', 
             help="don't use a separate build directory")
 
     args = parser.parse_args()
@@ -344,6 +367,13 @@ def main():
 
     build_dir_arg = "O=%s" % builddir
     temp_install_dir_arg = ""
+
+    ccache_arg = ""
+    if args.ccache:
+        if inPATH("ccache"):
+            ccache_arg = "CC=\"ccache gcc\""
+        else:
+            sys.stderr.write("WARNING: Could not find ccache on PATH.  Is it installed?\n")
 
 
     goto_ksrc_root()
@@ -357,6 +387,8 @@ def main():
     # run menuconfig
     if args.make_menuconfig:
         run_command("make %s menuconfig" % build_dir_arg)
+    if args.make_oldconfig:
+        run_command("make %s oldconfig" % build_dir_arg)
 
     # if there is no .config in the builddir, and we are trying to run make,
     # then this is a problem
@@ -367,7 +399,7 @@ def main():
             sys.exit(1)
 
     if args.make:
-        run_command("make %s" % build_dir_arg)
+        run_command("make %s %s" % (build_dir_arg, ccache_arg))
 
     if args.make_install_modules:
         if args.ssh:
@@ -375,9 +407,11 @@ def main():
             func = lambda: sys.stdout.write(str(tempfile.mkdtemp()))
             temp_mod_install_dir, _ = run_command(function=func, captureoutput=True)
             temp_install_dir_arg = "INSTALL_MOD_PATH=%s" % temp_mod_install_dir
-            run_command(command="make %s %s modules_install" % (temp_install_dir_arg, build_dir_arg)) 
+            run_command(command="make %s %s %s modules_install" % 
+                    (temp_install_dir_arg, build_dir_arg, ccache_arg)) 
         else:
-            run_command(command="make %s %s modules_install" % (temp_install_dir_arg, build_dir_arg), 
+            run_command(command="make %s %s %s modules_install" % 
+                    (temp_install_dir_arg, build_dir_arg, ccache_arg), 
                     dropprivs=False)
 
         sudo_uid_gid_exist = ("SUDO_UID" in os.environ and \
