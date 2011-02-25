@@ -238,19 +238,25 @@ def install_file(file_name, install_path):
                 (file_name, install_path, e))
         sys.exit(1)
 
-def remote_install_file(remotehost, file_name, remote_install_path, copy_link=False):
+def remote_install_file(remotehost, file_name, remote_install_path, copy_link=False, delete=False):
     """
     Install file_name on remotehost as remote_install_path.  If copy_link is
     true, then the real file link points to will be copied.  If it is false,
-    then the symlink itself will be copied
+    then the symlink itself will be copied. If delete is True, then the
+    --delete flag will be given to rsync.
     """
     if copy_link:
         link_flag = "-L"
     else:
         link_flag = "-l"
 
-    command = "rsync -r -z %s -q %s %s:%s" % \
-            (link_flag, file_name, remotehost, remote_install_path)
+    if delete:
+        delete_flag = "--delete"
+    else:
+        delete_flag = ""
+
+    command = "rsync -r -z %s %s -q %s %s:%s" % \
+            (link_flag, delete_flag, file_name, remotehost, remote_install_path)
     run_command(command)
 
 def install_kernel_local(build_dir_arg, builddir):
@@ -297,8 +303,13 @@ def install_kernel_remote(build_dir_arg, builddir, remotehost, tempmoddir=None):
         remote_install_file(remotehost, config, config_remote_install_path)
         remote_install_file(remotehost, systemmap, systemmap_remote_install_path)
 
+        release, _ = get_kernel_release_arch(build_dir_arg)
+
         if tempmoddir:
-            remote_install_file(remotehost, os.path.join(tempmoddir,"lib"), "/")
+            local_modpath = "lib/modules/%s" % release
+            remote_modpath = "/lib/modules/"
+            remote_install_file(remotehost, os.path.join(tempmoddir, local_modpath), 
+                    remote_modpath, delete=True)
             shutil.rmtree(tempmoddir)
     except CommandError, e:
         # if there was an error, then we must delete our temp mod dir.
@@ -308,6 +319,8 @@ def install_kernel_remote(build_dir_arg, builddir, remotehost, tempmoddir=None):
 
 def main():
     parser = argparse.ArgumentParser(description="Install the current kernel.")
+    parser.add_argument('--make-menuconfig', '-c', action='store_true', 
+            help="run `make menuconfig` first")
     parser.add_argument('--make', '-m', action='store_true', 
             help="run `make` first")
     parser.add_argument('--make-install-modules', '-i', action='store_true', 
@@ -337,21 +350,29 @@ def main():
 
     temp_mod_install_dir = ""
 
-    # make the builddir if it doesn't exist, make sure there is a 
-    # .config available, and finally run make
-    if args.make:
+    # make the builddir if it doesn't exist
+    if args.make or args.make_install_modules or args.make_menuconfig:
         run_command(function=(lambda: mkdir_no_error(builddir)))
+
+    # run menuconfig
+    if args.make_menuconfig:
+        run_command("make %s menuconfig" % build_dir_arg)
+
+    # if there is no .config in the builddir, and we are trying to run make,
+    # then this is a problem
+    if args.make or args.make_install_modules:
         if not os.path.exists(os.path.join(builddir, ".config")):
-            sys.stderr.write("No kernel .config in build dir %s\n" %
+            sys.stderr.write("No kernel .config in build dir %s. Do you need to run make menuconfig?\n" %
                     os.path.abspath(builddir))
             sys.exit(1)
+
+    if args.make:
         run_command("make %s" % build_dir_arg)
 
     if args.make_install_modules:
         if args.ssh:
             # make a temporary directory for us to use
             func = lambda: sys.stdout.write(str(tempfile.mkdtemp()))
-            #func = lambda: tempfile.mkdtemp()
             temp_mod_install_dir, _ = run_command(function=func, captureoutput=True)
             temp_install_dir_arg = "INSTALL_MOD_PATH=%s" % temp_mod_install_dir
             run_command(command="make %s %s modules_install" % (temp_install_dir_arg, build_dir_arg)) 
