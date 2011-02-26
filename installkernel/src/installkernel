@@ -12,6 +12,22 @@ import subprocess
 import sys
 import tempfile
 
+cleanup_dirs = []
+
+def add_cleanup_dir(dirname):
+    """
+    Add the directory dirname to a list of files that will be cleaned up when this
+    process exits, but ONLY when this process exits.
+    """
+    global cleanup_dirs
+    cleanup_dirs.append((dirname, os.getpid()))
+
+def cleanup():
+    for dirname, pid in cleanup_dirs:
+        if pid == os.getpid():
+            #sys.stderr.write("Cleaning up %s from %s...\n" % (dirname, pid))
+            shutil.rmtree(dirname, ignore_errors=False)
+
 def goto_ksrc_root():
     """
     Change directory to the root of the kernel source.  We check all
@@ -130,8 +146,14 @@ def run_command(command=None, function=None, dropprivs=True,
             os.setuid(sudo_uid)
 
 
+
         # need to get this 
         cur_user_name = pwd.getpwuid(os.getuid()).pw_name
+
+        # set the USER, LOGNAME, and HOME env vars correctly
+        os.environ["USER"] = cur_user_name
+        os.environ["LOGNAME"] = cur_user_name
+        os.environ["HOME"] = pwd.getpwuid(os.getuid()).pw_dir
 
         if command:
             print("running `%s`" % command)
@@ -245,12 +267,23 @@ def get_systemmap(build_dir_arg, builddir):
     systemmap_install_path = "/boot/System.map-%s" % release
     return systemmap, systemmap_install_path
 
-def install_file(file_name, install_path):
-    "Install a file using shutil.copyfile() with file_name as first arg and install_path as second."
+def install_file(file_name, install_path, delete=False, directory=False):
+    """
+    Install a file using shutil.copyfile() with file_name as first arg and
+    install_path as second. If it is a directory, then use copytree.  If delete
+    is True, then we try to delete the dir first only if we are dealing with
+    directories.
+    """
+    if delete and directory:
+            #print "Deleting %s" % install_path
+            shutil.rmtree(install_path, ignore_errors=True)
     try:
         print "Copying %s to %s" % (file_name, install_path)
-        shutil.copyfile(file_name, install_path)
-    except OSError, e:
+        if directory:
+            shutil.copytree(file_name, install_path, symlinks=True)
+        else:
+            shutil.copyfile(file_name, install_path)
+    except (OSError, IOError) as e:
         sys.stderr.write("ERROR: error when trying to copy %s to %s: %s\n" %
                 (file_name, install_path, e))
         sys.exit(1)
@@ -296,9 +329,27 @@ def install_kernel_local(build_dir_arg, builddir):
     install_file(config, config_install_path)
     install_file(systemmap, systemmap_install_path)
 
-def install_kernel_remote(build_dir_arg, builddir, remotehost, tempmoddir=None):
+def install_kernel_modules_local(build_dir_arg, tempmoddir):
     """
-    Install a kernel on the remote system.
+    Install kernel modules on the local system.  tempmoddir is the temp
+    directory created before running `make INSTALL_MOD_PATH=/some/path
+    modules_install`.  tempmoddir should be something like  would be
+    "/some/path".
+    """
+    # make sure you can write to boot
+    if not os.access("/lib/modules", os.W_OK):
+        sys.stderr.write("ERROR: cannot write to /lib/modules. Need to run this script with `sudo`?\n")
+        sys.exit(1)
+
+    release, _ = get_kernel_release_arch(build_dir_arg)
+    temp_modpath = "lib/modules/%s" % release
+    real_modpath = "/lib/modules/%s" % release
+    install_file(os.path.join(tempmoddir, temp_modpath), real_modpath, delete=True, directory=True)
+
+
+def install_kernel_remote(build_dir_arg, builddir, remotehost):
+    """
+    Install a kernel image on the remote system.
     build_dir_arg is a string to pass to make to tell it where the kernel
     sources are.  It is something like "O=." or "O=./build".
 
@@ -306,33 +357,29 @@ def install_kernel_remote(build_dir_arg, builddir, remotehost, tempmoddir=None):
 
     remotehost is the argument we pass to ssh to log into a remote host.
     It should be something like "root@127.127.127.1".
-
-    tempmoddir is the temp directory created before running 
-    `make INSTALL_MOD_PATH=/some/path modules_install`.  In this case,
-    tempmoddir would be "/some/path".
     """
     bzimage, bzimage_remote_install_path = get_bzimage(build_dir_arg, builddir)
     config, config_remote_install_path = get_config(build_dir_arg, builddir)
     systemmap, systemmap_remote_install_path = get_systemmap(build_dir_arg, builddir)
 
-    try:
-        remote_install_file(remotehost, bzimage, bzimage_remote_install_path, copy_link=True)
-        remote_install_file(remotehost, config, config_remote_install_path)
-        remote_install_file(remotehost, systemmap, systemmap_remote_install_path)
+    remote_install_file(remotehost, bzimage, bzimage_remote_install_path, copy_link=True)
+    remote_install_file(remotehost, config, config_remote_install_path)
+    remote_install_file(remotehost, systemmap, systemmap_remote_install_path)
 
-        release, _ = get_kernel_release_arch(build_dir_arg)
+def install_kernel_modules_remote(build_dir_arg, remotehost, tempmoddir):
+    """
+    Install kernel modules on the remote system.  remotehost is the argument we
+    pass to ssh to log into a remote host.  It should be something like
+    "root@127.127.127.1".  tempmoddir is the temp directory created before
+    running `make INSTALL_MOD_PATH=/some/path modules_install`.  tempmoddir
+    should be something like  would be "/some/path".
+    """
+    release, _ = get_kernel_release_arch(build_dir_arg)
+    local_modpath = "lib/modules/%s" % release
+    remote_modpath = "/lib/modules/"
+    remote_install_file(remotehost, os.path.join(tempmoddir, local_modpath), 
+            remote_modpath, delete=True)
 
-        if tempmoddir:
-            local_modpath = "lib/modules/%s" % release
-            remote_modpath = "/lib/modules/"
-            remote_install_file(remotehost, os.path.join(tempmoddir, local_modpath), 
-                    remote_modpath, delete=True)
-            shutil.rmtree(tempmoddir)
-    except CommandError, e:
-        # if there was an error, then we must delete our temp mod dir.
-        if tempmoddir:
-            shutil.rmtree(tempmoddir)
-        raise  # Should we raise here?
 
 def main():
     parser = argparse.ArgumentParser(description="Install the current kernel.")
@@ -340,10 +387,18 @@ def main():
             help="run `make` first")
     parser.add_argument('--make-install-modules', '-i', action='store_true', 
             help="run `make modules_install`")
+
+    parser.add_argument('--install-kernel', '-k', action='store_true', 
+            help="install kernel image to /boot")
+
     parser.add_argument('--ssh', '-s', action='store', metavar='REMOTE_MACHINE', 
             help="use ssh to copy kernel to REMOTE_MACHINE")
+
     parser.add_argument('--ccache', '-f', action='store_true',
             help="use ccache when compiling kernel")
+
+    parser.add_argument('--ctags', '-t', action='store_true', 
+            help="run `make tags`")
 
     make_config_group = parser.add_mutually_exclusive_group()
     make_config_group.add_argument('--make-menuconfig', '-c', action='store_true', 
@@ -384,6 +439,10 @@ def main():
     if args.make or args.make_install_modules or args.make_menuconfig:
         run_command(function=(lambda: mkdir_no_error(builddir)))
 
+    # make ctags
+    if args.ctags:
+        run_command("make %s tags" % build_dir_arg)
+
     # run menuconfig
     if args.make_menuconfig:
         run_command("make %s menuconfig" % build_dir_arg)
@@ -402,36 +461,39 @@ def main():
         run_command("make %s %s" % (build_dir_arg, ccache_arg))
 
     if args.make_install_modules:
+        func = lambda: sys.stdout.write(str(tempfile.mkdtemp()))
+        temp_mod_install_dir, _ = run_command(function=func, captureoutput=True)
+        add_cleanup_dir(temp_mod_install_dir)
+        temp_install_dir_arg = "INSTALL_MOD_PATH=%s" % temp_mod_install_dir
+        run_command(command="make %s %s %s modules_install" % 
+                (temp_install_dir_arg, build_dir_arg, ccache_arg)) 
+
+    if args.install_kernel or args.make_install_modules:
         if args.ssh:
-            # make a temporary directory for us to use
-            func = lambda: sys.stdout.write(str(tempfile.mkdtemp()))
-            temp_mod_install_dir, _ = run_command(function=func, captureoutput=True)
-            temp_install_dir_arg = "INSTALL_MOD_PATH=%s" % temp_mod_install_dir
-            run_command(command="make %s %s %s modules_install" % 
-                    (temp_install_dir_arg, build_dir_arg, ccache_arg)) 
+            if args.install_kernel:
+                install_kernel_remote(build_dir_arg, builddir, args.ssh)
+            if args.make_install_modules:
+                install_kernel_modules_remote(build_dir_arg, args.ssh, temp_mod_install_dir)
         else:
-            run_command(command="make %s %s %s modules_install" % 
-                    (temp_install_dir_arg, build_dir_arg, ccache_arg), 
-                    dropprivs=False)
+            if args.install_kernel:
+                install_kernel_local(build_dir_arg, builddir)
+            if args.make_install_modules:
+                install_kernel_modules_local(build_dir_arg, temp_mod_install_dir)
+        return
 
-        sudo_uid_gid_exist = ("SUDO_UID" in os.environ and \
-                "SUDO_GID" in os.environ)
-        if sudo_uid_gid_exist:
-            run_command(command="chown -R SUDOUSER:SUDOGROUP .", dropprivs=False,
-                    replaceusergroup=True)
+    # we are not running make or installing modules, so hopefully 
+    # we are doing something else.
+    if not args.ctags or args.make_menuconfig or args.make_oldconfig:
+        sys.stderr.write("ERROR! Not specified to do anything.\n")
 
-    if args.ssh:
-        if args.make_install_modules:
-            install_kernel_remote(build_dir_arg, builddir, args.ssh, temp_mod_install_dir)
-        else:
-            install_kernel_remote(build_dir_arg, builddir, args.ssh)
-    else:
-        install_kernel_local(build_dir_arg, builddir)
 
 
 
 
 if __name__ == '__main__':
-    main()
+    try:
+        main()
+    finally:
+        cleanup()
 
 # ex: ts=4 sw=4 et filetype=python
