@@ -470,10 +470,14 @@ def main():
 
     if args.install_kernel or args.make_install_modules:
         if args.ssh:
-            if args.install_kernel:
-                install_kernel_remote(build_dir_arg, builddir, args.ssh)
-            if args.make_install_modules:
-                install_kernel_modules_remote(build_dir_arg, args.ssh, temp_mod_install_dir)
+            try:
+                if args.install_kernel:
+                    install_kernel_remote(build_dir_arg, builddir, args.ssh)
+                if args.make_install_modules:
+                    install_kernel_modules_remote(build_dir_arg, args.ssh, temp_mod_install_dir)
+            except CommandError as e:
+                sys.stderr.write("ERROR: Cannot install kernel or modules remotely: %s.\n" % e)
+                sys.exit(1)
         else:
             if args.install_kernel:
                 install_kernel_local(build_dir_arg, builddir)
