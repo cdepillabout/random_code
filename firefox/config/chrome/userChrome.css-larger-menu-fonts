@@ -23,9 +23,8 @@
  */
 
 /*
- * Make all the default font sizes 20 pt:
+ * Make all the default font sizes 14 pt:
  */
-
 * {
 	font-size: 14pt !important
 }
