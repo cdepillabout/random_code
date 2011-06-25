@@ -1,0 +1,43 @@
+#!/bin/sh
+# Specific functions for my system.  These need to happen, otherwise 
+# wireless will not work correctly.
+# Basically it just rmmod's wireless card, then insmod's it.  Then
+# it restarts the wireless.
+
+. "${PM_FUNCTIONS}"
+
+my_die()
+{
+	echo "$@"
+	exit $NA
+}
+
+my_suspend()
+{
+	return 0
+}
+
+my_resume()
+{
+	echo "Reloading wireless..."
+	sleep 5
+	/sbin/modprobe -r iwlagn || my_die "Could not rmmod iwlagn."
+	sleep 2
+	/sbin/modprobe iwlagn || my_die "Could not insmod iwlagn."
+	sleep 3
+	/etc/rc.d/net-auto-wireless restart  # this will never tell us it has failed... :-\
+	echo "Done."
+}
+
+case "$1" in
+	#hibernate|suspend)
+	suspend)
+		my_suspend
+		;;
+	#thaw|resume)
+	resume)
+		my_resume
+		;;
+	*) exit $NA
+		;;
+esac
