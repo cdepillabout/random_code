@@ -7,6 +7,7 @@ import errno
 import grp
 import os
 import pwd
+import re
 import shutil
 import subprocess
 import sys
@@ -27,6 +28,22 @@ def cleanup():
         if pid == os.getpid():
             #sys.stderr.write("Cleaning up %s from %s...\n" % (dirname, pid))
             shutil.rmtree(dirname, ignore_errors=False)
+
+def get_default_jobs():
+    """
+    Return the default value for the -j argument to make.
+    This looks at the number of cpus in /proc/cpuinfo, and 
+    doubles it. Returns 2 on error.
+    """
+    try:
+        res = open('/proc/cpuinfo').read().count('processor\t:')
+        cpuinfo = open('/proc/cpuinfo').read()
+        count = len(re.findall("processor(\s)+:", cpuinfo))
+        if count > 0:
+            return count * 2
+    except:
+        return 2
+
 
 def goto_ksrc_root():
     """
@@ -382,6 +399,14 @@ def install_kernel_modules_remote(build_dir_arg, remotehost, tempmoddir):
 
 
 def main():
+    default_use_ccache = inPATH("ccache")
+    ccache_help = "use ccache when compiling kernel"
+    no_ccache_help = "do not use ccache when compiling kernel"
+    if default_use_ccache:
+        ccache_help += " (default)"
+    else:
+        no_ccache_help += " (default)"
+
     parser = argparse.ArgumentParser(description="Install the current kernel.")
     parser.add_argument('--make', '-m', action='store_true',
             help="run `make` first")
@@ -394,11 +419,8 @@ def main():
     parser.add_argument('--ssh', '-s', action='store', metavar='REMOTE_MACHINE',
             help="use ssh to copy kernel to REMOTE_MACHINE")
 
-    parser.add_argument('--ccache', '-f', action='store_true',
-            help="use ccache when compiling kernel")
-
-    parser.add_argument('--jobs', '-j', action='store', default=1, type=int,
-            help="specify the number of jobs")
+    parser.add_argument('--jobs', '-j', action='store', default=get_default_jobs(), type=int,
+            help="specify the number of jobs (default %s)" % get_default_jobs())
 
     parser.add_argument('--ctags', '-t', action='store_true',
             help="run `make tags`")
@@ -416,6 +438,12 @@ def main():
     build_dir_group.add_argument('--no-build-dir', '-n', action='store_true',
             help="don't use a separate build directory")
 
+    ccache_group = parser.add_mutually_exclusive_group()
+    ccache_group.add_argument('--ccache', '-f', action='store_true',
+            default=default_use_ccache, help=ccache_help)
+    ccache_group.add_argument('--no-ccache', '-g', action='store_true',
+            default=(not default_use_ccache), help=no_ccache_help)
+
     args = parser.parse_args()
 
     if args.no_build_dir:
@@ -427,7 +455,7 @@ def main():
     temp_install_dir_arg = ""
 
     ccache_arg = ""
-    if args.ccache:
+    if args.ccache and not args.no_ccache:
         if inPATH("ccache"):
             ccache_arg = "CC=\"ccache gcc\""
         else:
@@ -470,8 +498,8 @@ def main():
         temp_mod_install_dir, _ = run_command(function=func, captureoutput=True)
         add_cleanup_dir(temp_mod_install_dir)
         temp_install_dir_arg = "INSTALL_MOD_PATH=%s" % temp_mod_install_dir
-        run_command(command="make %s %s %s %s modules_install" %
-                (temp_install_dir_arg, build_dir_arg, ccache_arg, make_jobs_args))
+        run_command(command="make %s %s %s modules_install" %
+                (temp_install_dir_arg, build_dir_arg, ccache_arg))
 
     if args.install_kernel or args.make_install_modules:
         if args.ssh:
