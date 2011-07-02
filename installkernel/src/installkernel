@@ -409,7 +409,7 @@ def main():
 
     parser = argparse.ArgumentParser(description="Install the current kernel.")
     parser.add_argument('--make', '-m', action='store_true',
-            help="run `make` first")
+            help="run `make`")
     parser.add_argument('--make-install-modules', '-i', action='store_true',
             help="run `make modules_install`")
 
