@@ -13,7 +13,6 @@ _installkernel()
     case $prev in
         -s|--ssh)
             _known_hosts_real -a "$cur"
-            #_filedir
             return 0
             ;;
         -b|--build-dir)
@@ -24,9 +23,9 @@ _installkernel()
 
     if [[ "$cur" == -* ]]; then
         COMPREPLY=( $( compgen -W '--help --make --make-install-modules \
-            --build-dir --no-build-dir --ssh --install-kernel --ccache --ctags \
+            --build-dir --no-build-dir --ssh --install-kernel --ccache --no-ccache --ctags \
             --make-menuconfig --make-oldconfig \
-            -h -m -i -b -n -s -k -f -t -c -o' -- "$cur" ) )
+            -h -m -i -b -n -s -k -f -g -t -c -o' -- "$cur" ) )
     fi
 
     return 0
