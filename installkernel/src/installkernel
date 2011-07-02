@@ -383,34 +383,37 @@ def install_kernel_modules_remote(build_dir_arg, remotehost, tempmoddir):
 
 def main():
     parser = argparse.ArgumentParser(description="Install the current kernel.")
-    parser.add_argument('--make', '-m', action='store_true', 
+    parser.add_argument('--make', '-m', action='store_true',
             help="run `make` first")
-    parser.add_argument('--make-install-modules', '-i', action='store_true', 
+    parser.add_argument('--make-install-modules', '-i', action='store_true',
             help="run `make modules_install`")
 
-    parser.add_argument('--install-kernel', '-k', action='store_true', 
+    parser.add_argument('--install-kernel', '-k', action='store_true',
             help="install kernel image to /boot")
 
-    parser.add_argument('--ssh', '-s', action='store', metavar='REMOTE_MACHINE', 
+    parser.add_argument('--ssh', '-s', action='store', metavar='REMOTE_MACHINE',
             help="use ssh to copy kernel to REMOTE_MACHINE")
 
     parser.add_argument('--ccache', '-f', action='store_true',
             help="use ccache when compiling kernel")
 
-    parser.add_argument('--ctags', '-t', action='store_true', 
+    parser.add_argument('--jobs', '-j', action='store', default=1, type=int,
+            help="specify the number of jobs")
+
+    parser.add_argument('--ctags', '-t', action='store_true',
             help="run `make tags`")
 
     make_config_group = parser.add_mutually_exclusive_group()
-    make_config_group.add_argument('--make-menuconfig', '-c', action='store_true', 
+    make_config_group.add_argument('--make-menuconfig', '-c', action='store_true',
             help="run `make menuconfig` first")
-    make_config_group.add_argument('--make-oldconfig', '-o', action='store_true', 
+    make_config_group.add_argument('--make-oldconfig', '-o', action='store_true',
             help="run `make oldconfig` first")
 
     build_dir_group = parser.add_mutually_exclusive_group()
-    build_dir_group.add_argument('--build-dir', '-b', action='store', 
-            help="use a separate build directory, defaults to \"build/\"", 
+    build_dir_group.add_argument('--build-dir', '-b', action='store',
+            help="use a separate build directory, defaults to \"build/\"",
             default="./build")
-    build_dir_group.add_argument('--no-build-dir', '-n', action='store_true', 
+    build_dir_group.add_argument('--no-build-dir', '-n', action='store_true',
             help="don't use a separate build directory")
 
     args = parser.parse_args()
@@ -429,6 +432,8 @@ def main():
             ccache_arg = "CC=\"ccache gcc\""
         else:
             sys.stderr.write("WARNING: Could not find ccache on PATH.  Is it installed?\n")
+
+    make_jobs_args = "-j %d" % args.jobs
 
 
     goto_ksrc_root()
@@ -458,15 +463,15 @@ def main():
             sys.exit(1)
 
     if args.make:
-        run_command("make %s %s" % (build_dir_arg, ccache_arg))
+        run_command("make %s %s %s" % (build_dir_arg, ccache_arg, make_jobs_args))
 
     if args.make_install_modules:
         func = lambda: sys.stdout.write(str(tempfile.mkdtemp()))
         temp_mod_install_dir, _ = run_command(function=func, captureoutput=True)
         add_cleanup_dir(temp_mod_install_dir)
         temp_install_dir_arg = "INSTALL_MOD_PATH=%s" % temp_mod_install_dir
-        run_command(command="make %s %s %s modules_install" % 
-                (temp_install_dir_arg, build_dir_arg, ccache_arg)) 
+        run_command(command="make %s %s %s %s modules_install" %
+                (temp_install_dir_arg, build_dir_arg, ccache_arg, make_jobs_args))
 
     if args.install_kernel or args.make_install_modules:
         if args.ssh:
