@@ -492,7 +492,8 @@ def main():
 
     # we are not running make or installing modules, so hopefully 
     # we are doing something else.
-    if not args.ctags and not args.make_menuconfig and not args.make_oldconfig:
+    if (not args.ctags and not args.make_menuconfig and not args.make_oldconfig
+            and not args.make and not args.make_install_modules and not args.install_kernel):
         sys.stderr.write("ERROR! Not specified to do anything.\n")
 
 
