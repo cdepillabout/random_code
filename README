@@ -1,2 +1,12 @@
 
 Home for random code I write.
+
+This is a parent repo for a bunch of smaller repos with code that used to live
+here.  This is convenient because I can just checkout this repo, then run one 
+command to get all of the repos with code I might use.
+
+The child repos can be obtained by running the `create-sub-projects` command:
+
+$ cd random_code.git/
+$ ./create-sub-projects
+$

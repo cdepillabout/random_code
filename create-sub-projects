@@ -14,7 +14,7 @@ if [[ "$(basename $(pwd))" != "random_code" ]] ; then
 	exit 1
 fi
 
-for f in installkernel ; do
+for f in installkernel postured ; do
 	if [ ! -d "${f}/" ] ; then
 		git clone git@github.com:cdepillabout/${f}
 	fi
