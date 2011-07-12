@@ -1,0 +1,15 @@
+#!/bin/bash
+
+# make sure this is being run from the random_code directory
+if [[ "$(basename $(pwd))" != "random_code" ]] ; then
+	echo "ERROR! This is not the random_code repo."
+	exit 1
+fi
+
+for f in installkernel ; do
+	if [ ! -d "${f}/" ] ; then
+		git clone git@github.com:cdepillabout/${f}
+	fi
+done
+
+
