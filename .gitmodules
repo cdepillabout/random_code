@@ -1,0 +1,3 @@
+[submodule "installkernel"]
+	path = installkernel
+	url = git@github.com:cdepillabout/installkernel
