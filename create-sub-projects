@@ -1,5 +1,13 @@
 #!/bin/bash
 
+if [ "$#" -ne "0" ] ; then
+	cat <<EOF
+Usage: $0
+Clone all child repos under this repo.
+EOF
+fi
+
+
 # make sure this is being run from the random_code directory
 if [[ "$(basename $(pwd))" != "random_code" ]] ; then
 	echo "ERROR! This is not the random_code repo."
