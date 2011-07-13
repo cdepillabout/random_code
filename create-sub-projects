@@ -1,23 +1,61 @@
-#!/bin/bash
+#!/usr/bin/env python2
 
-if [ "$#" -ne "0" ] ; then
-	cat <<EOF
-Usage: $0
-Clone all child repos under this repo.
-EOF
-fi
+import argparse
+import os
+import sys
+
+from subprocess import call
+
+subprojects = [
+        'installkernel',
+        'postured',
+        ]
+
+def runcommand(cmd):
+    try:
+        retcode = call(cmd)
+        if retcode < 0:
+            sys.stderr.write("ERROR: command %s was terminated by signal %s\n" %
+                    (cmd, -retcode))
+            sys.exit(-retcode)
+        elif retcode > 0:
+            sys.stderr.write("ERROR: command %s failed with return code %s\n" %
+                    (cmd, retcode))
+            sys.exit(retcode)
+    except:
+        sys.stderr.write("ERROR: execution of command %s failed\n" % cmd)
+        sys.exit(1)
 
 
-# make sure this is being run from the random_code directory
-if [[ "$(basename $(pwd))" != "random_code" ]] ; then
-	echo "ERROR! This is not the random_code repo."
-	exit 1
-fi
+def main():
+    parser = argparse.ArgumentParser(description="Clone and optionally install subprojects.")
+    parser.add_argument('--install', '-i', action='store_true',
+            help="install subprojects")
+    parser.add_argument('--prefix', '-p', help="install to PREFIX")
 
-for f in installkernel postured ; do
-	if [ ! -d "${f}/" ] ; then
-		git clone git@github.com:cdepillabout/${f}
-	fi
-done
+    args = parser.parse_args()
+    print(args)
 
+    workingdir = os.getcwd()
 
+    if os.path.basename(workingdir) != "random_code":
+        sys.stderr.write("ERROR! Can not clone subprojects because cwd is not \"random_code/\".\n")
+        sys.exit(1)
+
+    for p in subprojects:
+        if not os.path.isdir(p):
+            retcode = runcommand(["git", "clone", "git@github.com:cdepillabout/%s" % p, p])
+
+        # install them if the install flag was passed
+        if args.install:
+            os.chdir(os.path.join(workingdir, p))
+
+            command = ["./setup.py", "install"]
+            if args.prefix:
+                command.append("--prefix=%s" % args.prefix)
+            runcommand(command)
+
+            os.chdir(workingdir)
+
+if __name__ == '__main__':
+    main()
