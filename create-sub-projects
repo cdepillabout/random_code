@@ -9,6 +9,7 @@ from subprocess import call, Popen, PIPE
 subprojects = [
         'installkernel',
         'postured',
+        'vbox-clone-vm',
         ]
 
 def runcommand(cmd):
