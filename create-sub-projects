@@ -73,7 +73,7 @@ def main():
         if not args.no_setup_config:
             username = getgitconfigopt("user.name")
             email = getgitconfigopt("user.email")
-            print("username: %s, email: %s" % (username, email))
+
             os.chdir(os.path.join(workingdir, p))
             setgitconfigopt("user.name", username)
             setgitconfigopt("user.email", email)
