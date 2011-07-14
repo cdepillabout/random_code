@@ -4,7 +4,7 @@ import argparse
 import os
 import sys
 
-from subprocess import call
+from subprocess import call, Popen, PIPE
 
 subprojects = [
         'installkernel',
@@ -12,6 +12,7 @@ subprojects = [
         ]
 
 def runcommand(cmd):
+    "Run cmd and exit on a bad return code."
     try:
         retcode = call(cmd)
         if retcode < 0:
@@ -26,12 +27,34 @@ def runcommand(cmd):
         sys.stderr.write("ERROR: execution of command %s failed\n" % cmd)
         sys.exit(1)
 
+def getcmdout(cmd):
+    "Run cmd and return stdout."
+    stdout, stderr = Popen(cmd, stdout=PIPE, stderr=PIPE).communicate()
+    stdout = stdout.decode('utf-8')
+    stderr = stderr.decode('utf-8')
+
+    if stderr:
+        print("ERROR! Could not run command %s:\n%s" % (args, stderr))
+        sys.exit(1)
+
+    return stdout
+
+def getgitconfigopt(opt):
+    "Run `git config` and return value of current git config option."
+    value = getcmdout(["git", "config", "--get", opt])
+    return value.strip()
+
+def setgitconfigopt(opt, value):
+    "Run set git config opt to value."
+    runcommand(["git", "config", opt, value])
 
 def main():
     parser = argparse.ArgumentParser(description="Clone and optionally install subprojects.")
     parser.add_argument('--install', '-i', action='store_true',
             help="install subprojects")
     parser.add_argument('--prefix', '-p', help="install to PREFIX")
+    parser.add_argument('--no-setup-config', '-d', action='store_true',
+            help="don't setup common config options (username, email)")
 
     args = parser.parse_args()
     print(args)
@@ -45,6 +68,15 @@ def main():
     for p in subprojects:
         if not os.path.isdir(p):
             retcode = runcommand(["git", "clone", "git@github.com:cdepillabout/%s" % p, p])
+
+        if not args.no_setup_config:
+            username = getgitconfigopt("user.name")
+            email = getgitconfigopt("user.email")
+            print("username: %s, email: %s" % (username, email))
+            os.chdir(os.path.join(workingdir, p))
+            setgitconfigopt("user.name", username)
+            setgitconfigopt("user.email", email)
+            os.chdir(workingdir)
 
         # install them if the install flag was passed
         if args.install:
