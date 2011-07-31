@@ -1,0 +1,14 @@
+#!/usr/bin/env bash
+# Start a VM
+
+VBoxManage startvm "$@" --type headless 
+echo -n "Trying to connect..."
+while ((1)) ; do
+	ssh -o "ConnectTimeout 1" "$@" ls 1>/dev/null 2>&1
+	if [ "$?" -eq 0 ] ; then
+		echo
+		exec ssh "$@"
+	else
+		echo -n "."
+	fi
+done

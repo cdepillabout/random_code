@@ -1,0 +1,6 @@
+
+* Don't start the VM if it is already started.
+
+* Maybe rename it `vbox-connect-vm`.
+
+* Write an install file.
