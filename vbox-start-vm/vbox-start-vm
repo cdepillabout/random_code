@@ -1,14 +1,44 @@
 #!/usr/bin/env bash
 # Start a VM
 
-VBoxManage startvm "$@" --type headless 
+vm_name="$@"
+
+VBoxManage startvm "$vm_name" --type headless
 echo -n "Trying to connect..."
 while ((1)) ; do
-	ssh -o "ConnectTimeout 1" "$@" ls 1>/dev/null 2>&1
+	ssh -o "ConnectTimeout 1" "$vm_name" ls 1>/dev/null 2>&1
 	if [ "$?" -eq 0 ] ; then
 		echo
-		exec ssh "$@"
+		break
 	else
 		echo -n "."
 	fi
 done
+
+ssh "$vm_name"
+
+savestate=""
+
+# loop around, trying to read in whether or not to save the state
+while [ "$savestate" != "n" -a "$savestate" != "y" ] ; do
+
+	# read in the variable
+	read -p "Save state? [Y/n]: " savestate
+
+	# if it is blank, then fill it in
+	if [ -z "$savestate" ] ; then
+		savestate="y"
+	fi
+
+	# lowercase it
+	savestate="$(echo $savestate | tr '[:upper:]' '[:lower:]')"
+
+	if [ "$savestate" != "n" -a "$savestate" != "y" ] ; then
+		echo "ERROR! You must enter either \"Y\" or \"N\"."
+	fi
+done
+
+if [ "$savestate" = "y" ] ; then
+	VBoxManage controlvm "$vm_name" savestate
+fi
+
