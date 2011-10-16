@@ -1,11 +1,12 @@
 #!/usr/bin/env python2
 # coding=utf-8
 
-import os, sys
+import os, sys, imp
 
 import anki
 from anki.cards import Card
 from anki.facts import Fact
+
 
 words = ['主に',
          '亀',
@@ -19,12 +20,6 @@ words = ['主に',
          '絶対',
          ]
 
-# This is a list of tuples.  The first value in the tuple is the
-# deck name.  The second value in the tuple is the field name
-# that we will use to match the word against.
-deck_info = [("/home/illabout/.anki/decks/Core 2000 and 6000 Vocabulary and Senten.anki", "Vocab"),
-             ("/home/illabout/.anki/decks/Core 10k.anki", "Vocab"),
-             ]
 
 # this is the query used to check if there are any facts that
 # match the word we are searching
@@ -68,12 +63,81 @@ def makefacthighpriority(deck, factid):
     fact.setModified(textChanged=True, deck=deck)
     deck.setModified()
 
+def creatercfiletemp(rcfile):
+    """
+    Create a template rc file in the user's home directory.
+    The rcfile argument is the path to the rcfile to create.
+    """
+    f = open(rcfile, 'w')
+    f.write("""
+
+# This is the rcfile for the anki_high_priority program.
+# This file specifies the decks and field you want to use
+# to search for words that you already know.
+
+# This is a list of tuples.  The first value in the tuple is the
+# deck name.  The second value in the tuple is the field name
+# that will be used to match the word against. This is interpreted as
+# valid python code, so please keep the syntax the same.
+# The syntax should be:
+#
+# deck_info = [ ("Deck name.anki", "fieldname"), ... ]
+#
+# The decks must be in your ~/.anki/decks/ directory.
+# Here is an example of how to use this:
+#
+# deck_info = [
+#                 ("Core 2000 and 6000 Vocabulary and Sentences.anki", "Vocab"),
+#                 ("Core 10k.anki", "Japanse Word"),
+#                 ("Subs2srs.anki", "Unknown Word"),
+#             ]
+#
+# Please make sure to remove any rows that are blank.
+
+deck_info = [
+                ("", ""),
+                ("", ""),
+            ]
+"""
+
+
 def main():
+
+    homedir = os.path.expanduser("~")
+    rcfile = os.path.expanduser("~/.anki_high_priority_rc.py")
+    decks_dir = os.path.expanduser("~/.anki/decks/")
+
+    # make sure the decks_dir exists
+    if not os.path.isdir(decks_dir):
+        sys.stderr.write("ERROR! Anki decks directory does not exist (%s)!\n" % decks_dir)
+        sys.exit(1)
+
+    # make sure the rc file exists, and create a template if it doesn't
+    if not os.path.isfile(rcfile):
+        try:
+            creatercfiletemp(rcfile)
+            sys.stderr.write("ERROR! RC file (%s) does not exist.\n" % rcfile)
+            sys.stderr.write("A template has been created for you.\n")
+            sys.stderr.write("Please edit the template and try running this program again.\n")
+            sys.exit(1)
+        except:
+            sys.stderr.write("ERROR! RC file (%s) does not exist.\n" % rcfile)
+            sys.stderr.write("There was an error with creating it:\n")
+            raise
+
+
+    # get the deck info from the config file
+    try:
+        config = imp.load_source('anki_high_priority_config',
+            '/home/illabout/.anki_high_priority_rc.py')
+    except:
+
 
     # make sure all of the decks exist
     for deckname, fieldname in deck_info:
-        if not os.path.exists(deckname) or not os.path.isfile(deckname):
+        if not os.path.isfile(deckname):
             sys.stderr.write("ERROR! Deck \"%s\" does not exist.\n" % deckname)
+            sys.exit(1)
 
     decks = opendecks(deck_info)
 
@@ -106,11 +170,6 @@ def main():
             d.close()
 
 
-
-"""
-    for f in words
-    pass
-"""
 
 if __name__ == '__main__':
     main()
