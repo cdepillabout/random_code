@@ -12,6 +12,7 @@ subprojects = [
         'on-screen',
         'postured',
         'vbox-clone-vm',
+        'vbox-vm-status',
         ]
 
 def runcommand(cmd):
