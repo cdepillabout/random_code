@@ -9,6 +9,7 @@ from subprocess import call, Popen, PIPE
 subprojects = [
         'anki-high-priority',
         'installkernel',
+        'nhk_podcast_player',
         'on-screen',
         'postured',
         'vbox-clone-vm',
