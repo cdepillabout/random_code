@@ -3,6 +3,11 @@
 
 vm_name="$@"
 
+if [ -z "$vm_name" ] ; then
+	echo "Must specify vm on command line." >&2
+	exit 1
+fi
+
 VBoxManage startvm "$vm_name" --type headless
 echo -n "Trying to connect..."
 while ((1)) ; do
