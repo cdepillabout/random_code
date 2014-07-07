@@ -60,3 +60,7 @@ menupopup > * {
  * For more examples see http://www.mozilla.org/unix/customizing.html
  */
  
+/* Make tabs not terrible. */
+/* #TabsToolbar {
+	-moz-box-ordinal-group: 10000 !important
+} */
