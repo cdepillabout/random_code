@@ -9,6 +9,13 @@ if [ -z "$vm_name" ] ; then
 fi
 
 VBoxManage startvm "$vm_name" --type headless
+if [ "$?" -ne 0 ] ; then
+	echo
+	echo
+	echo "Could not start the vm, exiting..."
+	exit 1
+fi
+
 echo -n "Trying to connect..."
 while ((1)) ; do
 	ssh -o "ConnectTimeout 1" "$vm_name" ls 1>/dev/null 2>&1
