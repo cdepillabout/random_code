@@ -12,7 +12,7 @@ function die () {
 function start_vm () {
 	local vm_name="$1"
 
-	echo "Starting \"${vm_name}\""
+	echo "Starting \"${vm_name}\"..."
 	VBoxManage startvm "$vm_name" --type headless
 	if [ "$?" -ne 0 ] ; then
 		echo
@@ -59,7 +59,7 @@ savestate=""
 while [ "$savestate" != "n" -a "$savestate" != "y" ] ; do
 
 	# read in the variable
-	read -p "Save state? [Y/n]: " savestate
+	read -p "Save state and shutdown VM? [Y/n]: " savestate
 
 	# if it is blank, then fill it in
 	if [ -z "$savestate" ] ; then
